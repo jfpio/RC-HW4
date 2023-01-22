@@ -62,6 +62,9 @@ class Environment:
         # Load the agent.
         self.agent = self.load_cube(*agent_init_pos, self.cell_length / 4, self.cell_length / 2, color=[0.5, 1., 0.5, 1])
 
+        # DEBUG
+        self.end = self.load_cube(*self.goal_position, self.cell_length / 4, self.cell_length / 2, color=[1.0, 0, 0, 1])
+
     def load_cube(self, x, y, z, length, color=None) -> int:
         if color is None:
             color = [1, 0.5, 0.7, 1]
