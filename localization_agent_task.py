@@ -1,5 +1,4 @@
 import math
-import time
 from queue import PriorityQueue
 from typing import Dict, Optional
 
@@ -41,6 +40,11 @@ class PrioritizedItem:
     item: Any = field(compare=False)
 
 
+def normalize_array(array: np.ndarray):
+    normalization_coefficient = np.sum(array)
+    return array / normalization_coefficient
+
+
 def check_if_position_is_valid(position: Position, grid: np.ndarray) -> bool:
     return 0 <= position.x < grid.shape[0] and 0 <= position.y < grid.shape[1] and grid[position.x, position.y] == 0
 
@@ -71,7 +75,11 @@ def a_star_search(occ_map: np.ndarray, start: Position, end: Position) -> Dict[
     while not open_queue.empty():
         current_node = open_queue.get().item
         if current_node == end:
-            break
+            path = [end]
+            while path[-1] != start:
+                path.append(came_from[path[-1]])
+            path = list(reversed(path))
+            return {path[i]: path[i + 1] for i in range(len(path) - 1)}
 
         moves = [Position(0, 1), Position(0, -1), Position(1, 0), Position(-1, 0)]
         valid_moves = [move for move in moves if check_if_position_is_valid(current_node + move * 2, occ_map)]
@@ -83,12 +91,6 @@ def a_star_search(occ_map: np.ndarray, start: Position, end: Position) -> Dict[
                 came_from[new_node] = current_node
                 g_score_map[new_node] = tentative_g_score
                 open_queue.put(PrioritizedItem(heuristic_function(new_node, end), new_node))
-
-    path = [end]
-    while path[-1] != start:
-        path.append(came_from[path[-1]])
-    path = list(reversed(path))
-    return {path[i]: path[i + 1] for i in range(len(path) - 1)}
 
 
 class LocalizationMap:
@@ -112,6 +114,10 @@ class LocalizationMap:
         self.ideal_measurements = np \
             .concatenate(results) \
             .reshape((self.environment.gridmap.shape[0], self.environment.gridmap.shape[1], 3))
+
+    def position_update(self, distances: np.ndarray, delta: Optional[Position] = None):
+        self.position_update_by_motion_model(delta)
+        self.position_update_by_measurement_model(distances)
 
     def position_update_by_motion_model(self, delta: Optional[Position]) -> None:
         """
@@ -142,9 +148,7 @@ class LocalizationMap:
                     new_probability_map[new_position.x, new_position.y] += \
                         probability_of_move * self.probability_map[x, y]
 
-        probability_map_normalization_coefficient = np.sum(new_probability_map)
-        new_probability_map = new_probability_map / probability_map_normalization_coefficient
-
+        new_probability_map = normalize_array(new_probability_map)
         assert math.isclose(np.sum(new_probability_map), 1.0, abs_tol=0.01)  # Too many zeros, error
         self.probability_map = new_probability_map
 
@@ -154,26 +158,21 @@ class LocalizationMap:
         :param distances: Noisy distances from current agent position to the nearest obstacle.
         """
         """ TODO: your code goes here """
+        weights = self.get_weights_for_measurement_model(distances)
 
+        new_probability_map = self.probability_map * weights
+        new_probability_map = normalize_array(new_probability_map)
+
+        assert math.isclose(np.sum(new_probability_map), 1.0, abs_tol=0.01)  # Too many zeros, error
+        self.probability_map = new_probability_map
+
+    def get_weights_for_measurement_model(self, distances: np.ndarray) -> np.ndarray:
         X = distances / self.ideal_measurements
         norm = stats.norm(loc=1, scale=self.environment.lidar_stochasticity)
         weights = norm.pdf(X)
         weights = np.prod(weights, axis=-1)
         weights[self.environment.gridmap == 1] = 0
-        normalization_coefficient = np.sum(weights)
-        weights = weights / normalization_coefficient
-
-        new_probability_map = self.probability_map * weights
-        probability_map_normalization_coefficient = np.sum(new_probability_map)
-
-        new_probability_map = new_probability_map / probability_map_normalization_coefficient
-
-        assert math.isclose(np.sum(new_probability_map), 1.0, abs_tol=0.01)  # Too many zeros, error
-        self.probability_map = new_probability_map
-
-    def position_update(self, distances: np.ndarray, delta: Optional[Position] = None):
-        self.position_update_by_motion_model(delta)
-        self.position_update_by_measurement_model(distances)
+        return weights
 
 
 class LocalizationAgent:
@@ -192,7 +191,7 @@ class LocalizationAgent:
         """
         """ TODO: your code goes here """
 
-        angles, distances = self.environment.lidar()
+        _, distances = self.environment.lidar()
         self.localization_map.position_update(distances, self.previous_move)
 
         positions = []
@@ -214,15 +213,6 @@ class LocalizationAgent:
 
         next_position = mapping[chosen_position]
         delta = next_position - chosen_position
-
-        if delta == Position(1, 0):
-            print("Down")
-        elif delta == Position(-1, 0):
-            print("Up")
-        elif delta == Position(0, 1):
-            print("Right")
-        elif delta == Position(0, -1):
-            print("Left")
 
         self.previous_move = delta
         self.environment.step(delta.to_tuple())
