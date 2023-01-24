@@ -28,6 +28,9 @@ class Position:
     def __sub__(self, other):
         return Position(self.x - other.x, self.y - other.y)
 
+    def __mul__(self, scalar):
+        return Position(self.x * scalar, self.y * scalar)
+
     def to_tuple(self):
         return self.x, self.y
 
@@ -70,11 +73,11 @@ def a_star_search(occ_map: np.ndarray, start: Position, end: Position) -> Dict[
         if current_node == end:
             break
 
-        children_positions = [current_node + Position(x, y) for x, y in ((1, 0), (-1, 0), (0, 1), (0, -1))]
-        valid_children_positions = [position for position in children_positions if
-                                    check_if_position_is_valid(position, occ_map)]
+        moves = [Position(0, 1), Position(0, -1), Position(1, 0), Position(-1, 0)]
+        valid_moves = [move for move in moves if check_if_position_is_valid(current_node + move * 2, occ_map)]
+        children_positions = [current_node + move for move in valid_moves]
 
-        for new_node in valid_children_positions:
+        for new_node in children_positions:
             tentative_g_score = g_score_map[current_node] + 1
             if new_node not in g_score_map or tentative_g_score < g_score_map[new_node]:
                 came_from[new_node] = current_node
@@ -127,7 +130,7 @@ class LocalizationMap:
             for y in range(self.probability_map.shape[1]):
                 new_position = Position(x, y) + delta
 
-                if self.environment.gridmap[x, y] == 1: # Current cell is obstacle
+                if self.environment.gridmap[x, y] == 1:  # Current cell is obstacle
                     continue
 
                 elif not check_if_position_is_valid(new_position, self.environment.gridmap) \
@@ -135,13 +138,14 @@ class LocalizationMap:
                     new_probability_map[x, y] = self.probability_map[x, y]
 
                 else:
-                    new_probability_map[x, y] = (1 - probability_of_move) * self.probability_map[x, y]
-                    new_probability_map[new_position.to_tuple()] = probability_of_move * self.probability_map[x, y]
+                    new_probability_map[x, y] += (1 - probability_of_move) * self.probability_map[x, y]
+                    new_probability_map[new_position.x, new_position.y] += \
+                        probability_of_move * self.probability_map[x, y]
 
         probability_map_normalization_coefficient = np.sum(new_probability_map)
         new_probability_map = new_probability_map / probability_map_normalization_coefficient
 
-        assert math.isclose(np.sum(new_probability_map), 1.0, abs_tol=0.01) # Too many zeros, error
+        assert math.isclose(np.sum(new_probability_map), 1.0, abs_tol=0.01)  # Too many zeros, error
         self.probability_map = new_probability_map
 
     def position_update_by_measurement_model(self, distances: np.ndarray) -> None:
@@ -164,7 +168,7 @@ class LocalizationMap:
 
         new_probability_map = new_probability_map / probability_map_normalization_coefficient
 
-        assert math.isclose(np.sum(new_probability_map), 1.0, abs_tol=0.01) # Too many zeros, error
+        assert math.isclose(np.sum(new_probability_map), 1.0, abs_tol=0.01)  # Too many zeros, error
         self.probability_map = new_probability_map
 
     def position_update(self, distances: np.ndarray, delta: Optional[Position] = None):
@@ -210,7 +214,7 @@ class LocalizationAgent:
 
         next_position = mapping[chosen_position]
         delta = next_position - chosen_position
-        delta = Position(0, 1)
+
         if delta == Position(1, 0):
             print("Down")
         elif delta == Position(-1, 0):
@@ -234,31 +238,30 @@ class LocalizationAgent:
 
 
 if __name__ == "__main__":
-    np.random.seed(420)
     maze = generate_maze((11, 11))
     env = Environment(
         maze,
         lidar_angles=3,
         resolution=1 / 11 / 10,
-        agent_init_pos=(0.10, 0.15),
+        agent_init_pos=None,
         goal_position=(0.87, 0.87),
         position_stochasticity=0.5,
-        lidar_stochasticity=0.1
     )
     agent = LocalizationAgent(env)
 
     while not env.success():
         agent.step()
 
-        if env.total_steps % 1 == 0:
+        if env.total_steps % 10 == 0:
             plt.imshow(agent.visualize())
             plt.colorbar()
             plt.show()
-            time.sleep(1)
+
+            # Show works better for my IDE (PyCharm)
             # plt.savefig('/tmp/map.png')
             # plt.close(plt.gcf())
             #
             # cv2.imshow('map', cv2.imread('/tmp/map.png'))
-            # cv2.waitKey(0)
+            # cv2.waitKey(1)
 
     print(f"Total steps taken: {env.total_steps}, total lidar readings: {env.total_lidar_readings}")
