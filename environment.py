@@ -54,10 +54,15 @@ class Environment:
                 self.load_cube(col * self.cell_length, row * self.cell_length, self.cell_length / 2, self.cell_length, color=[1, 0.5, 0.7, 1])
 
         # Init agent position randomly in a not occupied position if initial agent position not set.
-        if agent_init_pos is None:
+        while agent_init_pos is None:
             idxs = list(np.ndindex(self.gridmap.shape))
-            agent_init_pos = self.rowcol_to_xy(idxs[np.random.choice(
-                range(len(idxs)), p=(1 - self.gridmap).flatten() / np.sum(1 - self.gridmap))])
+            x, y = idxs[np.random.choice(
+                range(len(idxs)), p=(1 - self.gridmap).flatten() / np.sum(1 - self.gridmap))]
+
+            if self.gridmap[x, y] != 0:
+                continue
+
+            agent_init_pos = self.rowcol_to_xy((x, y))
 
         # Load the agent.
         self.agent = self.load_cube(*agent_init_pos, self.cell_length / 4, self.cell_length / 2, color=[0.5, 1., 0.5, 1])
