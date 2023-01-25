@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 
 import cv2
@@ -35,16 +36,16 @@ class OccupancyMap:
         if not check_if_in_bounds(pos, self.log_odds_map):
             return
 
-        constant = np.log(8 if occupied else 0.1)
-        self.log_odds_map[pos.to_tuple()] += constant
+        def get_constant():
+            if occupied and distance < 2:
+                return 30
+            elif occupied:
+                return 1
+            else:
+                return 0.1
 
-        if occupied:
-            surrounding_cells = [pos + move for move in [
-                Position(1, 0), Position(-1, 0), Position(0, 1), Position(0, -1),
-                Position(1, 1), Position(-1, -1), Position(1, -1), Position(-1, 1)]
-            ]
-            for cell in surrounding_cells:
-                self.log_odds_map[cell.to_tuple()] += np.log(4)
+        constant = get_constant()
+        self.log_odds_map[pos.to_tuple()] += np.log(constant)
 
     def map_update(self, pos: Position, angles: np.ndarray, distances: np.ndarray) -> None:
         """
@@ -59,7 +60,12 @@ class OccupancyMap:
             cells_to_update = bresenham(pos.to_tuple(), end.to_tuple())
             for cell in cells_to_update:
                 cell_position = Position(cell[0], cell[1])
-                self.point_update(pos=cell_position, occupied=cell_position == end, distance=None, total_distance=None)
+                self.point_update(
+                    pos=cell_position,
+                    occupied=cell_position == end,
+                    distance=math.dist(end.to_tuple(), cell_position.to_tuple()),
+                    total_distance=None
+                )
 
         self.probability_map = self.log_odds_map_to_probability_map(self.log_odds_map)
 
@@ -132,7 +138,7 @@ if __name__ == "__main__":
         agent_init_pos=(0.136, 0.136),
         goal_position=(0.87, 0.87),
         lidar_angles=256,
-        lidar_stochasticity=0.001
+        lidar_stochasticity=0.2
     )
     agent = MappingAgent(env)
 
