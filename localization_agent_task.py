@@ -1,5 +1,6 @@
 import math
 from queue import PriorityQueue
+from random import choice
 from typing import Dict, Optional
 
 import cv2
@@ -60,12 +61,10 @@ def a_star_search(occ_map: np.ndarray, start: Position, end: Position) -> Dict[
         {start: intermediate, intermediate: ..., almost: goal}
     """
     """ TODO: your code goes here """
-    assert occ_map[start.x, start.y] == 0, "cannot start from occupied place"
-    assert occ_map[start.x, start.y] == 0, "cannot end in occupied place"
-
     def heuristic_function(a: Position, b: Position) -> float:
         return ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
 
+    moves = [Position(0, 1), Position(0, -1), Position(1, 0), Position(-1, 0)]
     g_score_map = {start: 0}
     came_from = {}
 
@@ -81,8 +80,9 @@ def a_star_search(occ_map: np.ndarray, start: Position, end: Position) -> Dict[
             path = list(reversed(path))
             return {path[i]: path[i + 1] for i in range(len(path) - 1)}
 
-        moves = [Position(0, 1), Position(0, -1), Position(1, 0), Position(-1, 0)]
-        valid_moves = [move for move in moves if check_if_position_is_valid(current_node + move * 2, occ_map)]
+        valid_moves = [move for move in moves if
+                       check_if_position_is_valid(current_node + move * 2, occ_map)
+                       and check_if_position_is_valid(current_node + move, occ_map)]
         children_positions = [current_node + move for move in valid_moves]
 
         for new_node in children_positions:
@@ -91,6 +91,8 @@ def a_star_search(occ_map: np.ndarray, start: Position, end: Position) -> Dict[
                 came_from[new_node] = current_node
                 g_score_map[new_node] = tentative_g_score
                 open_queue.put(PrioritizedItem(heuristic_function(new_node, end), new_node))
+
+    return {start: start + choice(moves)}
 
 
 class LocalizationMap:
