@@ -1,16 +1,17 @@
 from typing import Optional
 
 import cv2
-
 import numpy as np
 from matplotlib import pyplot as plt
 
 from environment import Environment
-from localization_agent_task import a_star_search, Position, check_if_position_is_valid
+from localization_agent_task import a_star_search, Position
 from utils import generate_maze, bresenham
+
 
 def check_if_in_bounds(position: Position, grid: np.ndarray) -> bool:
     return 0 <= position.x < grid.shape[0] and 0 <= position.y < grid.shape[1]
+
 
 class OccupancyMap:
     def __init__(self, environment):
@@ -18,8 +19,8 @@ class OccupancyMap:
         self.environment = environment
         self.probability_map = np.full_like(environment.gridmap, fill_value=0.5)
 
-        self.l0 = np.log(1)
-        self.log_odds_map = np.full_like(environment.gridmap, fill_value=self.l0)
+        l0 = np.log(0.5/0.5)
+        self.log_odds_map = np.full_like(environment.gridmap, fill_value=l0)
 
     def point_update(self, pos: Position, distance: Optional[float], total_distance: Optional[float],
                      occupied: bool) -> None:
@@ -77,7 +78,7 @@ class OccupancyMap:
     def calculate_end_position(position: Position, angle: float, distance: float) -> Position:
         d_x = distance * np.cos(angle)
         d_y = distance * np.sin(angle)
-        return position + Position(int(d_x), int(d_y))
+        return position + Position(int(round(d_x)), int(round(d_y)))
 
 
 class MappingAgent:
@@ -113,7 +114,6 @@ class MappingAgent:
         next_position = a_star_mapping[my_position]
         delta = next_position - my_position
         self.environment.step(delta.to_tuple())
-
 
     def visualize(self) -> np.ndarray:
         """
